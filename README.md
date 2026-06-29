@@ -65,7 +65,7 @@ Canton explicit disclosure instead.
 
 ## The contracts
 
-### `daml/Asset.daml` — `Holding`
+### `daml/Asset.daml`: `Holding`
 
 A simplified fungible token holding.
 
@@ -87,7 +87,7 @@ template Holding with
 - **`Split { splitAmount }`** (controller `owner`): carves an exact-size piece
   off a holding, used to size a swap or payment leg precisely.
 
-### `daml/Trading.daml` — `Order`
+### `daml/Trading.daml`: `Order`
 
 The core primitive: a confidential limit order. Visible only to the maker, the
 invited taker, and an optional regulator.
@@ -109,7 +109,7 @@ template Order with
   transaction.
 - **`Cancel`** (controller `maker`): withdraws a resting order, privately.
 
-### `daml/Setup.daml` — demo script
+### `daml/Setup.daml`: demo script
 
 `Setup.demo` runs the whole flow end to end (seed wallets, a private send, a
 confidential limit order, a fill) and **asserts on-ledger** that the market can
