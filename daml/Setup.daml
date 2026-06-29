@@ -1,0 +1,87 @@
+module Setup where
+
+import Asset
+import Trading
+import Daml.Script
+
+-- | The institutions in the blackrocq demo.
+data LedgerParties = LedgerParties with
+  custodian   : Party  -- ^ issues/safekeeps holdings; an observer, not a trader
+  pensionFund : Party  -- ^ the buyer
+  bankDealer  : Party  -- ^ the dealer / seller responding to the RFQ
+  rivalDealer : Party  -- ^ a competing dealer who must learn NOTHING
+  regulator   : Party  -- ^ optional auditor with a private read-only window
+  deriving (Eq, Show)
+
+setupParties : Script LedgerParties
+setupParties = do
+  custodian   <- allocateParty "Custodian"
+  pensionFund <- allocateParty "PensionFund"
+  bankDealer  <- allocateParty "BankDealer"
+  rivalDealer <- allocateParty "RivalDealer"
+  regulator   <- allocateParty "Regulator"
+  pure LedgerParties with ..
+
+-- | End-to-end happy path with privacy assertions baked in. This doubles as
+-- the init-script (see daml.yaml) so `daml start` boots straight into a
+-- settled trade you can inspect in the Navigator.
+demo : Script ()
+demo = do
+  LedgerParties{..} <- setupParties
+  let reg = Some regulator
+
+  -- Issue the seller 1,000 bonds and the buyer 1,000,000 USD of tokenized cash.
+  -- (Simplified mint: the owner self-signs. Production would gate issuance
+  --  behind a custodian propose/accept.)
+  bondCid <- submit bankDealer do
+    createCmd Holding with
+      issuer = custodian; owner = bankDealer; regulator = reg
+      instrument = "ACME-2030-BOND"; amount = 1000.0
+  cashCid <- submit pensionFund do
+    createCmd Holding with
+      issuer = custodian; owner = pensionFund; regulator = reg
+      instrument = "USD"; amount = 1000000.0
+
+  -- Step 1: the buyer privately asks ONLY BankDealer for a price on 1,000 bonds.
+  rfqCid <- submit pensionFund do
+    createCmd RFQ with
+      buyer = pensionFund; dealer = bankDealer; regulator = reg
+      instrument = "ACME-2030-BOND"; quantity = 1000.0
+
+  -- Privacy assertion: the rival dealer cannot see the RFQ.
+  rivalRfqs <- query @RFQ rivalDealer
+  assertMsg "PRIVACY BREACH: rival dealer can see the RFQ" (null rivalRfqs)
+
+  -- Step 2: BankDealer quotes USD 950.00 per bond.
+  proposalCid <- submit bankDealer do
+    exerciseCmd rfqCid Quote with unitPrice = 950.0
+
+  -- Step 3: the buyer accepts, creating a bilateral Trade (price = 950,000).
+  tradeCid <- submit pensionFund do
+    exerciseCmd proposalCid AcceptQuote
+
+  -- Carve the exact payment leg (950,000) out of the buyer's 1,000,000 balance.
+  (paymentCid, _changeCid) <- submit pensionFund do
+    exerciseCmd cashCid Split with splitAmount = 950000.0
+
+  -- Step 4: atomic delivery-versus-payment.
+  _ <- submit pensionFund do
+    exerciseCmd tradeCid Settle with assetCid = bondCid; cashCid = paymentCid
+
+  -- Outcome assertions: the buyer holds the bonds, the seller holds the cash...
+  buyerHoldings  <- query @Holding pensionFund
+  sellerHoldings <- query @Holding bankDealer
+  assertMsg "buyer should now hold the bonds"
+    (any (\(_, h) -> h.instrument == "ACME-2030-BOND" && h.owner == pensionFund) buyerHoldings)
+  assertMsg "seller should now hold the cash"
+    (any (\(_, h) -> h.instrument == "USD" && h.amount == 950000.0 && h.owner == bankDealer) sellerHoldings)
+
+  -- ...and the rival dealer STILL saw nothing of the whole lifecycle.
+  rivalTrades <- query @Trade rivalDealer
+  assertMsg "PRIVACY BREACH: rival dealer can see the Trade" (null rivalTrades)
+
+  -- The regulator, by contrast, can audit the settled trade.
+  regTrades <- query @Trade regulator
+  assertMsg "regulator should be able to audit the trade" (not (null regTrades))
+
+  pure ()
