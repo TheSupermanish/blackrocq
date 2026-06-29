@@ -11,7 +11,6 @@ data LedgerParties = LedgerParties with
   bankDealer  : Party  -- ^ the dealer / seller responding to the RFQ
   rivalDealer : Party  -- ^ a competing dealer who must learn NOTHING
   regulator   : Party  -- ^ optional auditor with a private read-only window
-  deriving (Eq, Show)
 
 setupParties : Script LedgerParties
 setupParties = do
@@ -60,12 +59,25 @@ demo = do
   tradeCid <- submit pensionFund do
     exerciseCmd proposalCid AcceptQuote
 
+  -- Privacy checks on the LIVE trade (before it settles and is archived):
+  -- the regulator can audit it; the rival dealer still sees nothing.
+  liveTradesReg <- query @Trade regulator
+  assertMsg "regulator should be able to audit the trade" (not (null liveTradesReg))
+  liveTradesRival <- query @Trade rivalDealer
+  assertMsg "PRIVACY BREACH: rival dealer can see the Trade" (null liveTradesRival)
+
   -- Carve the exact payment leg (950,000) out of the buyer's 1,000,000 balance.
   (paymentCid, _changeCid) <- submit pensionFund do
     exerciseCmd cashCid Split with splitAmount = 950000.0
 
   -- Step 4: atomic delivery-versus-payment.
-  _ <- submit pensionFund do
+  -- Both counterparties co-submit the settlement: inside Settle each leg must
+  -- be readable, and Canton privacy means neither party can see the other's
+  -- holding by default. Co-submission provides that visibility for the single
+  -- atomic transaction. (In production this is done with Canton explicit
+  -- disclosure, so neither party needs standing visibility into the other's
+  -- holdings.)
+  _ <- submitMulti [pensionFund, bankDealer] [] do
     exerciseCmd tradeCid Settle with assetCid = bondCid; cashCid = paymentCid
 
   -- Outcome assertions: the buyer holds the bonds, the seller holds the cash...
@@ -75,13 +87,5 @@ demo = do
     (any (\(_, h) -> h.instrument == "ACME-2030-BOND" && h.owner == pensionFund) buyerHoldings)
   assertMsg "seller should now hold the cash"
     (any (\(_, h) -> h.instrument == "USD" && h.amount == 950000.0 && h.owner == bankDealer) sellerHoldings)
-
-  -- ...and the rival dealer STILL saw nothing of the whole lifecycle.
-  rivalTrades <- query @Trade rivalDealer
-  assertMsg "PRIVACY BREACH: rival dealer can see the Trade" (null rivalTrades)
-
-  -- The regulator, by contrast, can audit the settled trade.
-  regTrades <- query @Trade regulator
-  assertMsg "regulator should be able to audit the trade" (not (null regTrades))
 
   pure ()

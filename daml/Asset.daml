@@ -28,12 +28,14 @@ template Holding
 
     ensure amount > 0.0
 
-    -- | Reassign ownership. Controlled by the current owner; a caller such as
-    -- the Settle choice must already hold the owner's authority for this to run.
+    -- | Reassign ownership. Both the current owner and the recipient must
+    -- authorize: the recipient because they become the sole signatory of the
+    -- new holding (you cannot force an asset onto someone). Inside an atomic
+    -- Settle, both authorities are already present, so the swap goes through.
     choice Transfer : ContractId Holding
       with
         newOwner : Party
-      controller owner
+      controller owner, newOwner
       do create this with owner = newOwner
 
     -- | Split a holding into an exact-size piece and the remaining change.
