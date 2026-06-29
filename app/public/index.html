@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>blackrocq · live</title>
+<style>
+  :root{
+    --ink:#0B0E17; --ink2:#0E121C; --panel:#151A26; --line:#262E40; --line-soft:#1E2738;
+    --text:#ECEEF4; --muted:#828DA6; --faint:#56607A;
+    --amber:#F2A33C; --green:#5FD08A; --red:#E2706A;
+    --sans:"Helvetica Neue","SF Pro Display",-apple-system,system-ui,Arial,sans-serif;
+    --mono:"SF Mono","Menlo","JetBrains Mono",ui-monospace,"Courier New",monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{background:var(--ink);color:var(--text);font-family:var(--sans);min-height:100vh;
+    background-image:radial-gradient(60% 50% at 20% 0%,rgba(242,163,60,.06),transparent 60%);}
+  a{color:var(--amber);}
+
+  header{padding:22px 30px 16px;border-bottom:1px solid var(--line-soft);
+    display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;}
+  .brand{font-weight:800;letter-spacing:-.03em;font-size:30px;}
+  .brand .q{color:var(--amber);}
+  .brand small{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--amber);font-weight:600;margin-bottom:6px;letter-spacing:.22em;}
+  .tagline{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:.04em;}
+
+  .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  button{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+    background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;
+    padding:9px 13px;cursor:pointer;transition:.12s;}
+  button:hover:not(:disabled){border-color:var(--amber);color:var(--amber);}
+  button:disabled{opacity:.32;cursor:not-allowed;}
+  button.primary{background:var(--amber);color:#1a1206;border-color:var(--amber);font-weight:700;}
+  button.primary:hover:not(:disabled){filter:brightness(1.08);color:#1a1206;}
+  button.ghost{background:transparent;}
+
+  .flow{display:flex;gap:6px;align-items:center;padding:12px 30px;border-bottom:1px solid var(--line-soft);
+    font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;flex-wrap:wrap;}
+  .flow .s{color:var(--faint);padding:4px 8px;border-radius:6px;}
+  .flow .s.done{color:var(--green);}
+  .flow .s.active{color:var(--amber);background:rgba(242,163,60,.1);}
+  .flow .arr{color:var(--line);}
+
+  main{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:20px 30px 40px;}
+  @media (max-width:900px){ main{grid-template-columns:1fr;} }
+
+  .col{background:linear-gradient(180deg,var(--panel),var(--ink2));border:1px solid var(--line);
+    border-radius:14px;overflow:hidden;display:flex;flex-direction:column;min-height:62vh;}
+  .col h2{margin:0;padding:18px 20px 14px;font-size:18px;letter-spacing:-.01em;display:flex;
+    align-items:baseline;gap:10px;border-bottom:1px solid var(--line-soft);}
+  .col h2 .role{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);}
+  .col.ok{box-shadow:inset 4px 0 0 var(--green);}
+  .col.no{box-shadow:inset 4px 0 0 var(--red);}
+  .col.reg{box-shadow:inset 4px 0 0 var(--amber);}
+  .col .who{font-family:var(--mono);font-size:11px;color:var(--muted);padding:0 20px 12px;border-bottom:1px solid var(--line-soft);}
+
+  .cards{padding:14px 16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex:1;}
+  .card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:rgba(255,255,255,.012);}
+  .card .t{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--amber);margin-bottom:7px;display:flex;justify-content:space-between;}
+  .card .t .cid{color:var(--faint);font-size:9px;letter-spacing:.02em;}
+  .card .row{font-family:var(--mono);font-size:13px;line-height:1.55;color:var(--text);}
+  .card .row .k{color:var(--muted);}
+  .card .amt{color:var(--amber);}
+  .card .badge{display:inline-block;font-family:var(--mono);font-size:9px;letter-spacing:.12em;
+    text-transform:uppercase;padding:2px 7px;border-radius:5px;margin-top:8px;}
+  .badge.settled{background:rgba(95,208,138,.15);color:var(--green);}
+
+  /* redaction state for the rival */
+  .redacted{display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;
+    flex:1;padding:30px 24px;text-align:center;}
+  .redbars{display:flex;flex-direction:column;gap:10px;width:100%;max-width:230px;}
+  .redbar{height:16px;border-radius:3px;
+    background:repeating-linear-gradient(45deg,#02040A 0 7px,#0B0F18 7px 14px);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);}
+  .redacted .note{font-family:var(--sans);font-size:14px;color:var(--muted);line-height:1.55;max-width:230px;}
+  .redacted .stamp{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--red);}
+
+  .empty{color:var(--faint);font-family:var(--mono);font-size:12px;padding:20px;text-align:center;}
+  footer{padding:0 30px 30px;color:var(--faint);font-family:var(--mono);font-size:11px;letter-spacing:.04em;}
+  .live{display:inline-flex;align-items:center;gap:7px;color:var(--green);}
+  .live .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 rgba(95,208,138,.6);
+    animation:pulse 1.8s infinite;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(95,208,138,.5);}70%{box-shadow:0 0 0 7px rgba(95,208,138,0);}100%{box-shadow:0 0 0 0 rgba(95,208,138,0);}}
+  @media (prefers-reduced-motion:reduce){ .live .dot{animation:none;} }
+</style>
+</head>
+<body>
+  <header>
+    <div>
+      <div class="brand"><small>Confidential OTC desk · Canton</small>blackroc<span class="q">q</span></div>
+      <div class="tagline">one trade, three points of view, live on a Canton ledger</div>
+    </div>
+    <div class="controls">
+      <button class="ghost" id="b-reset">↻ Reset</button>
+      <button id="b-rfq">1 · RFQ</button>
+      <button id="b-quote">2 · Quote</button>
+      <button id="b-accept">3 · Accept</button>
+      <button class="primary" id="b-settle">4 · Settle (DvP)</button>
+    </div>
+  </header>
+
+  <div class="flow" id="flow"></div>
+
+  <main>
+    <section class="col ok">
+      <h2>Counterparties <span class="role">insiders</span></h2>
+      <div class="who" id="who-cp">Pension Fund ⇄ Bank Dealer</div>
+      <div class="cards" id="cards-cp"></div>
+    </section>
+    <section class="col no">
+      <h2>Rival dealer <span class="role">the market</span></h2>
+      <div class="who">competing market maker · not a party</div>
+      <div class="cards" id="cards-rival"></div>
+    </section>
+    <section class="col reg">
+      <h2>Regulator <span class="role">oversight</span></h2>
+      <div class="who">read-only observer on every contract</div>
+      <div class="cards" id="cards-reg"></div>
+    </section>
+  </main>
+
+  <footer>
+    <span class="live"><span class="dot"></span>live</span>
+    &nbsp;·&nbsp; <span id="ledger-note">polling the Daml JSON API every 2s</span>
+    &nbsp;·&nbsp; privacy is enforced by Canton's signatory/observer model, not by this UI
+  </footer>
+
+<script>
+const STEPS = ["seeded","rfq","quote","accept","settled"];
+const STEP_LABEL = {seeded:"Seeded", rfq:"RFQ", quote:"Quote", accept:"Trade", settled:"Settled"};
+let friendly = {}; // partyId -> label
+
+function labelParty(id){
+  if(!id) return "-";
+  if(friendly[id]) return friendly[id];
+  // Optional regulator may arrive as the raw id; fall back to a short form.
+  const m = String(id).split("-")[0];
+  return ({Custodian:"Custodian",PensionFund:"Pension Fund",BankDealer:"Bank Dealer",
+           RivalDealer:"Rival Dealer",Regulator:"Regulator"})[m] || String(id).slice(0,10);
+}
+function num(x){ const n = parseFloat(x); return isNaN(n) ? x : n.toLocaleString("en-US"); }
+
+function renderCard(c){
+  const p = c.payload, cid = (c.contractId||"").slice(-6);
+  let body = "";
+  if(c.type==="Holding"){
+    body = `<div class="row"><span class="amt">${num(p.amount)}</span> ${p.instrument}</div>
+            <div class="row"><span class="k">owner</span> ${labelParty(p.owner)}</div>`;
+  } else if(c.type==="RFQ"){
+    body = `<div class="row"><span class="amt">${num(p.quantity)}</span> ${p.instrument}</div>
+            <div class="row"><span class="k">from</span> ${labelParty(p.buyer)} <span class="k">→ to</span> ${labelParty(p.dealer)}</div>`;
+  } else if(c.type==="TradeProposal" || c.type==="Trade"){
+    body = `<div class="row"><span class="amt">${num(p.quantity)}</span> ${p.instrument} <span class="k">@</span> ${num(p.cashAmount/ (parseFloat(p.quantity)||1))}</div>
+            <div class="row"><span class="k">value</span> <span class="amt">${num(p.cashAmount)}</span> ${p.cashInstrument}</div>
+            <div class="row"><span class="k">${labelParty(p.seller)}</span> ⇄ <span class="k">${labelParty(p.buyer)}</span></div>`;
+  }
+  const settled = c.type==="Trade" ? "" : "";
+  return `<div class="card"><div class="t"><span>${c.type}</span><span class="cid">#${cid}</span></div>${body}</div>`;
+}
+
+function renderColumn(el, items){
+  if(!items.length){ el.innerHTML = `<div class="empty">no contracts</div>`; return; }
+  // group: holdings last so the lifecycle contract reads first
+  const order = {RFQ:0,TradeProposal:1,Trade:1,Holding:2};
+  items.sort((a,b)=> (order[a.type]??9)-(order[b.type]??9));
+  el.innerHTML = items.map(renderCard).join("");
+}
+
+function renderRival(items){
+  const el = document.getElementById("cards-rival");
+  if(items.length){ renderColumn(el, items); return; }
+  el.innerHTML = `<div class="redacted">
+      <div class="redbars"><div class="redbar"></div><div class="redbar" style="width:70%"></div><div class="redbar" style="width:85%"></div></div>
+      <div class="stamp">no records visible</div>
+      <div class="note">A trade may be settling right now. This dealer is not a party to it, so the ledger reveals nothing, not even that it exists.</div>
+    </div>`;
+}
+
+function renderFlow(step){
+  const i = STEPS.indexOf(step);
+  document.getElementById("flow").innerHTML = STEPS.map((s,idx)=>{
+    const cls = idx<i ? "done" : idx===i ? "active" : "";
+    return `<span class="s ${cls}">${STEP_LABEL[s]}</span>` + (idx<STEPS.length-1?`<span class="arr">→</span>`:"");
+  }).join("");
+}
+
+function gate(step){
+  document.getElementById("b-rfq").disabled    = step!=="seeded";
+  document.getElementById("b-quote").disabled  = step!=="rfq";
+  document.getElementById("b-accept").disabled = step!=="quote";
+  document.getElementById("b-settle").disabled = step!=="accept";
+}
+
+function apply(state){
+  const p = state.parties || {};
+  friendly = {
+    [p.custodian]:"Custodian",[p.fund]:"Pension Fund",[p.dealer]:"Bank Dealer",
+    [p.rival]:"Rival Dealer",[p.regulator]:"Regulator",
+  };
+  document.getElementById("who-cp").textContent =
+    `${labelParty(p.fund)} ⇄ ${labelParty(p.dealer)}`;
+  renderColumn(document.getElementById("cards-cp"), state.views.counterparties);
+  renderRival(state.views.rival);
+  renderColumn(document.getElementById("cards-reg"), state.views.regulator);
+  renderFlow(state.step);
+  gate(state.step);
+}
+
+async function refresh(){
+  try{ const r = await fetch("/api/state"); apply(await r.json()); }catch(e){}
+}
+async function act(path, btn){
+  const els = document.querySelectorAll("button"); els.forEach(b=>b.disabled=true);
+  try{
+    const r = await fetch(path,{method:"POST"});
+    const j = await r.json();
+    if(j.error){ alert(j.error); await refresh(); return; }
+    apply(j);
+  }catch(e){ alert(String(e)); await refresh(); }
+}
+
+document.getElementById("b-reset").onclick  = ()=>act("/api/reset");
+document.getElementById("b-rfq").onclick    = ()=>act("/api/rfq");
+document.getElementById("b-quote").onclick  = ()=>act("/api/quote");
+document.getElementById("b-accept").onclick = ()=>act("/api/accept");
+document.getElementById("b-settle").onclick = ()=>act("/api/settle");
+
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>

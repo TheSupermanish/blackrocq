@@ -62,13 +62,29 @@ neither the RFQ nor the Trade, while the regulator can audit the live trade.
 
 See [DEPLOY.md](DEPLOY.md) for hosted deployment (Seaport, Canton DevNet).
 
+## Live demo app
+
+A three-panel UI shows one trade from three points of view, querying the ledger
+*as* each party over the Daml JSON API, so the privacy is real:
+
+![settled trade](docs/demo-settled.png)
+
+```bash
+./app/run-local.sh        # builds, starts sandbox + JSON API + backend
+# open http://localhost:4000 and step RFQ -> Quote -> Accept -> Settle
+```
+
+The rival dealer's column stays empty through the entire lifecycle. See
+[app/README.md](app/README.md) for architecture and how to point it at Seaport.
+
 ## Status
 
 - [x] Core Daml model: RFQ → Quote → Trade → atomic DvP, with regulator window
 - [x] `daml build` clean; `daml test` green (3 active contracts, 7 transactions)
 - [x] Deploys to a live Canton ledger and runs the full flow (verified on sandbox)
-- [ ] Split-screen UI: "what the counterparties see" vs "what the market sees"
+- [x] Split-screen UI: counterparties vs rival (redacted) vs regulator, live on the ledger
+- [x] Pitch deck (`deck/`, rendered to PDF)
 - [ ] Public live deployment (Seaport / hosted participant)
 - [ ] Multi-dealer RFQ (buyer fans out to N dealers, each blind to the others)
 - [ ] Daml Finance instruments for the asset and tokenized-deposit cash leg
-- [ ] Deck + 3-minute demo video
+- [ ] 3-minute demo video

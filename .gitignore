@@ -1,3 +1,5 @@
 .daml/
 *.dar
 .vscode/
+app/.pkgid
+node_modules/
