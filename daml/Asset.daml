@@ -1,0 +1,51 @@
+module Asset where
+
+-- | A simplified fungible holding (asset or tokenized cash).
+--
+-- Design note for blackrocq:
+--   The *owner* is the sole signatory. This is what lets an on-ledger
+--   delivery-versus-payment swap settle atomically inside a single
+--   transaction (see Trading.Trade.Settle): the Settle choice runs with the
+--   authority of both trade signatories, so it can move both legs at once.
+--
+--   The issuer and an optional regulator ride along as *observers*. They can
+--   see and audit the holding but never need to authorize a transfer. This is
+--   the "private to the market, transparent to the regulator" property that
+--   makes the model credible for institutional use.
+--
+--   A production system would represent instruments and holdings with the
+--   Daml Finance libraries instead of this hand-rolled template.
+template Holding
+  with
+    issuer : Party
+    owner : Party
+    regulator : Optional Party
+    instrument : Text
+    amount : Decimal
+  where
+    signatory owner
+    observer issuer, regulator
+
+    ensure amount > 0.0
+
+    -- | Reassign ownership. Controlled by the current owner; a caller such as
+    -- the Settle choice must already hold the owner's authority for this to run.
+    choice Transfer : ContractId Holding
+      with
+        newOwner : Party
+      controller owner
+      do create this with owner = newOwner
+
+    -- | Split a holding into an exact-size piece and the remaining change.
+    -- Used to carve a payment leg of the precise trade value out of a larger
+    -- cash balance.
+    choice Split : (ContractId Holding, ContractId Holding)
+      with
+        splitAmount : Decimal
+      controller owner
+      do
+        assertMsg "split amount must be > 0 and < the holding amount"
+          (splitAmount > 0.0 && splitAmount < amount)
+        piece  <- create this with amount = splitAmount
+        change <- create this with amount = amount - splitAmount
+        pure (piece, change)

@@ -1,0 +1,108 @@
+module Trading where
+
+import Asset
+
+-- | Step 1 — Request for Quote.
+--
+-- A buyer privately asks ONE named dealer for a price on a block of an asset.
+-- Only the buyer (signatory) and that dealer (observer) can see this contract.
+-- The wider market and every other dealer see nothing at all — this is the
+-- core confidentiality property of blackrocq, enforced by Canton's
+-- sub-transaction privacy rather than by application-level access control.
+template RFQ
+  with
+    buyer : Party
+    dealer : Party
+    regulator : Optional Party
+    instrument : Text
+    quantity : Decimal
+  where
+    signatory buyer
+    observer dealer, regulator
+
+    ensure quantity > 0.0
+
+    -- | The dealer responds privately with a unit price, producing a quote
+    -- only the two of them (and the regulator) can see.
+    choice Quote : ContractId TradeProposal
+      with
+        unitPrice : Decimal
+      controller dealer
+      do
+        assertMsg "unit price must be positive" (unitPrice > 0.0)
+        create TradeProposal with
+          seller = dealer
+          buyer
+          regulator
+          instrument
+          quantity
+          cashInstrument = "USD"
+          cashAmount = unitPrice * quantity
+
+    choice CancelRFQ : ()
+      controller buyer
+      do pure ()
+
+-- | Step 2 — the dealer's binding quote, visible only to the dealer
+-- (signatory) and the buyer (observer).
+template TradeProposal
+  with
+    seller : Party
+    buyer : Party
+    regulator : Optional Party
+    instrument : Text
+    quantity : Decimal
+    cashInstrument : Text
+    cashAmount : Decimal
+  where
+    signatory seller
+    observer buyer, regulator
+
+    -- | Buyer accepts, turning the one-sided quote into a bilateral trade that
+    -- both parties have authorized.
+    choice AcceptQuote : ContractId Trade
+      controller buyer
+      do create Trade with ..
+
+    choice RejectQuote : ()
+      controller buyer
+      do pure ()
+
+-- | Step 3 — a bilateral trade both parties have agreed to. Settles atomically.
+template Trade
+  with
+    seller : Party
+    buyer : Party
+    regulator : Optional Party
+    instrument : Text
+    quantity : Decimal
+    cashInstrument : Text
+    cashAmount : Decimal
+  where
+    signatory seller, buyer
+    observer regulator
+
+    -- | Delivery-versus-payment. The asset and the cash change hands in ONE
+    -- transaction, or not at all. Because both seller and buyer are
+    -- signatories of this Trade, this choice carries both their authorities,
+    -- so both Transfer legs succeed together with no trusted intermediary
+    -- ever holding both sides.
+    choice Settle : (ContractId Holding, ContractId Holding)
+      with
+        assetCid : ContractId Holding  -- ^ the seller's asset, sized to `quantity`
+        cashCid  : ContractId Holding  -- ^ the buyer's cash, sized to `cashAmount`
+      controller buyer
+      do
+        asset <- fetch assetCid
+        assertMsg "asset must belong to the seller" (asset.owner == seller)
+        assertMsg "asset instrument mismatch"       (asset.instrument == instrument)
+        assertMsg "asset quantity mismatch"          (asset.amount == quantity)
+
+        cash <- fetch cashCid
+        assertMsg "cash must belong to the buyer"   (cash.owner == buyer)
+        assertMsg "cash instrument mismatch"         (cash.instrument == cashInstrument)
+        assertMsg "cash amount mismatch"             (cash.amount == cashAmount)
+
+        deliveredAsset <- exercise assetCid Transfer with newOwner = buyer
+        paidCash       <- exercise cashCid  Transfer with newOwner = seller
+        pure (deliveredAsset, paidCash)
