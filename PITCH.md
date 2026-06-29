@@ -1,153 +1,130 @@
 # blackrocq: Pitch
 
-**Confidential OTC trading desk on Canton.**
+**Confidential DeFi on Canton.** Private send, private swap, private limit orders.
 *Private DeFi & Capital Markets track · Canton Foundation*
 
 ---
 
 ## The one-liner
 
-> Block trades, settled atomically, with the market kept blind, and the
-> regulator kept informed.
+> Send, swap, and trade tokens privately. The parties (and a regulator) see
+> everything; the public market sees nothing; settlement is atomic.
 
 ---
 
 ## The problem
 
-When a pension fund wants to buy a large block of bonds, it has a problem:
-**the moment its intent is visible, the price moves against it.** This is
-information leakage, and it is the multi-billion-dollar reason institutions
-avoid public order books and trade over-the-counter (OTC) through private
-desks and dark pools.
+On a public chain, everyone sees everything you do. Every transfer, every swap,
+every resting order is public the instant you make it. Your positions leak, your
+orders get front-run, your strategy gets copied. Posting an order on a public
+DEX is broadcasting your intent to every bot in the mempool, which sandwiches
+you and hands you a worse price. This is not a bug in one app; it is how public
+ledgers work.
 
-But today's OTC plumbing is a mess of bilateral messages, manual
-reconciliation, and settlement risk: one side can deliver while the other
-fails to pay. And public blockchains make the leakage problem *worse*:
-everything is visible to everyone, forever.
+Three things leak, and none of them can be made private on a public chain:
 
-So institutions are stuck:
-- **Public chains** leak positions, counterparties, and size to the world.
-- **Private databases** can't settle atomically across firms without a trusted
-  intermediary holding both legs.
-- **Legacy OTC** is slow, manual, and carries settlement risk.
+- **Transfers**: every send is a permanent public trail of who paid whom.
+- **Swaps**: visible in the mempool, front-run and sandwiched before they land.
+- **Orders**: a resting limit order is a public signal of your size and price.
 
 ---
 
 ## The solution: blackrocq
 
-A confidential OTC desk built on **Canton**, where privacy and atomic
-settlement are properties of the ledger itself, not bolted-on access control.
+Confidential DeFi on Canton. Three private primitives, one engine:
 
-1. **Request for Quote**: a buyer privately asks *one* named dealer for a
-   price. No other dealer, and no part of the market, can see the request.
-2. **Quote**: the dealer responds with a price, visible only to the two of
-   them.
-3. **Accept**: the buyer turns the quote into a bilateral trade both parties
-   have signed.
-4. **Settle**: delivery-versus-payment: the asset and the cash change hands
-   in a **single atomic transaction**, or neither leg moves. No intermediary
-   ever holds both sides.
+1. **Send** (`Holding.Transfer`): move tokens with no public trail. Only you and
+   the recipient (and an optional regulator) ever see it.
+2. **Swap** (`Order` + `Fill`): exchange two assets in a single atomic
+   transaction, or neither leg moves. No mempool, no front-running, no
+   settlement risk.
+3. **Limit order** (`Order`, resting): post your price; it stays invisible until
+   your chosen taker fills it. A swap is just a limit order filled immediately,
+   so one template powers both.
 
-Throughout, an **optional regulator** observes every contract: *private to
-the market, transparent to the regulator.*
+Every primitive is private by construction, and every contract carries an
+optional regulator observer: private to the market, transparent to the regulator.
 
 ---
 
 ## Why this can only work on Canton
 
-This is not "a database with permissions." Two of Canton's core capabilities
-are load-bearing:
-
 | Capability | What it buys us |
 |---|---|
-| **Sub-transaction privacy** (signatory / observer model) | A rival dealer never even learns a trade happened. Enforced by the ledger. |
-| **Atomic multi-party settlement** | True DvP with zero settlement risk and no trusted middleman. |
+| **Sub-transaction privacy** (signatory / observer model) | An outsider never learns a send, swap, or order happened. Enforced by the ledger. |
+| **Atomic multi-party settlement** | A swap moves both legs together or not at all. No mempool window to front-run, no middleman. |
 
-Take either away and the product collapses. That's the test of a real Canton
-app, and blackrocq passes it.
-
----
-
-## Demo (the 10-second proof)
-
-Split screen.
-
-- **Left: the counterparties:** RFQ, quote, signed trade, settled positions.
-- **Right: the rival dealer:** *empty.* A trade worth a million dollars just
-  settled and they see nothing.
-- **Bottom: the regulator:** the full, auditable record.
-
-Our `Setup.demo` script proves this on-ledger: it **asserts** the rival can
-query neither the RFQ nor the Trade, while the regulator can audit the settled
-trade. Privacy isn't a claim in our slides: it's a passing test.
+Take either away and confidential DeFi collapses. That is the test of a real
+Canton app, and blackrocq passes it.
 
 ---
 
-## How it maps to the judging criteria
+## The proof (the 10-second demo)
 
-- **Technical execution**: clean, documented Daml; privacy enforced by the
-  ledger; atomic DvP with on-ledger assertions, not hand-waving.
-- **Originality**: a regulator-observable confidential trading desk; most
-  teams build private *or* auditable, not both.
-- **UX & design**: the split-screen "who-sees-what" view makes invisible
-  privacy legible to a non-technical user in seconds.
-- **Real-world applicability**: information leakage in block trading is a
-  genuine, expensive, institutional problem. This is how desks actually work.
+One ledger, three points of view, side by side in the live app:
 
-Spans **Private DeFi & Capital Markets** (OTC, private deal execution) and
-touches **RWA & Tokenized Deposits** (the cash leg is a tokenized deposit).
+- **Counterparties (Alice and Bob):** a swap and a resting limit order, live.
+- **Public market:** redacted. A trade is settling right now and it sees nothing.
+- **Regulator:** the full, auditable record.
+
+This is the running app, not a mockup. Our test suite asserts on-ledger that the
+market can query none of it while the regulator can audit every send, swap, and
+order.
 
 ---
 
-## The ask
+## Who it's for
 
-We're building the front door to institutional capital markets on Canton,
-where a fund can move size without moving the market, and a regulator can still
-see everything. blackrocq.
+- **Traders and funds:** move and trade size without being front-run or copied.
+- **Market makers:** post private quotes and fill them without revealing the book.
+- **Institutions and regulators:** confidentiality the market cannot see, with
+  oversight the regulator always can.
+
+Spans Private DeFi & Capital Markets, with reach into payments / neobanking and
+RWA & tokenized deposits.
 
 ---
 
 ## 3-minute spoken script
 
-**[0:00–0:30] Hook.**
-"A pension fund wants to buy a hundred million in bonds. The instant the market
-sees that order, the price runs away from them. That single problem,
-information leakage, is why trillions trade off-exchange, over the counter. We
-built the OTC desk for that world, on Canton. It's called blackrocq."
+**[0:00-0:30] Hook.**
+"On a public chain, everyone sees everything you do. The moment you post a swap
+or an order, every bot in the mempool sees your size and your price, front-runs
+you, and hands you a worse fill. We built DeFi where that can't happen. It's
+called blackrocq: confidential DeFi on Canton."
 
-**[0:30–1:15] Problem.**
-"Today institutions are stuck between three bad options. Public chains broadcast
-your every position. Private databases can't settle a trade across two firms
-without someone trusted holding both the cash and the asset. And legacy OTC is
-slow, manual, and full of settlement risk: where one side pays and the other
-fails to deliver. Nobody has private *and* atomic *and* auditable."
+**[0:30-1:10] Problem.**
+"Three things leak on every public chain and none can be made private: your
+transfers are a permanent public trail, your swaps get sandwiched in the
+mempool, and a resting limit order is just a public signal you're trading
+against yourself. Privacy isn't a missing feature there. It's impossible."
 
-**[1:15–2:15] Solution + demo.**
-"blackrocq gives you all three. Watch. A fund sends a request for quote to one
-dealer: privately. Over here is a rival dealer's screen: nothing. The dealer
-quotes, the fund accepts, and they settle delivery-versus-payment: the bonds
-and the cash swap in one atomic transaction, or neither moves. The rival dealer
-still sees nothing. But down here, the regulator sees the whole thing. Private
-to the market, transparent to the regulator."
+**[1:10-2:10] Solution and demo.**
+"blackrocq gives you three private primitives on one engine. Send: move tokens
+with no public trail. Swap: exchange two assets atomically, no mempool, no
+front-running. And limit orders: post your price and it rests invisibly until
+your taker fills it. Watch the live app. Here are the two counterparties: a swap
+and a resting order. Here is a rival in the public market: nothing, redacted. And
+here is the regulator: the full record. Same ledger, three completely different
+views."
 
-**[2:15–3:00] Why Canton + close.**
-"This only works because Canton gives us two things no permissioned database
-can: sub-transaction privacy, so the trade is invisible to outsiders by
-construction, and atomic multi-party settlement, so there's no middleman and no
-settlement risk. Our privacy guarantee isn't a slide: it's an assertion in our
-test suite that the rival can't see the trade. blackrocq: move size without
-moving the market. Thank you."
+**[2:10-3:00] Why Canton and close.**
+"This only works because Canton gives us two things no public chain can:
+sub-transaction privacy, so an outsider never learns the trade happened, and
+atomic settlement, so both legs move together with no mempool window to attack.
+Our privacy guarantee isn't a slide; it's an assertion in our test suite that the
+market can't see the trade. blackrocq: send, swap, and trade, without the whole
+world watching. Thank you."
 
 ---
 
 ## Slide outline (deck)
 
-1. **Title**: blackrocq · Confidential OTC desk on Canton
-2. **The problem**: information leakage moves the price against you
-3. **Three bad options**: public chains / private DBs / legacy OTC
-4. **blackrocq**: private, atomic, auditable
-5. **How it works**: RFQ → Quote → Accept → atomic DvP (the diagram)
-6. **The demo**: split-screen who-sees-what
-7. **Why only Canton**: sub-transaction privacy + atomic settlement
-8. **Who it's for**: the desks that move real money (capital markets + tokenized deposits)
-9. **The ask / close**
+1. **Title**: blackrocq, confidential DeFi on Canton
+2. **The problem**: a public chain shows everyone everything (front-running / MEV)
+3. **What leaks**: transfers / swaps / orders
+4. **The primitives**: send / swap / limit order
+5. **The proof**: one ledger, three points of view (live app)
+6. **Why only Canton**: sub-transaction privacy + atomic settlement
+7. **Who it's for**: traders, market makers, institutions and regulators
+8. **The ask / close**
