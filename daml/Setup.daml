@@ -4,88 +4,72 @@ import Asset
 import Trading
 import Daml.Script
 
--- | The institutions in the blackrocq demo.
+-- | The actors in the blackrocq confidential-DeFi demo.
 data LedgerParties = LedgerParties with
-  custodian   : Party  -- ^ issues/safekeeps holdings; an observer, not a trader
-  pensionFund : Party  -- ^ the buyer
-  bankDealer  : Party  -- ^ the dealer / seller responding to the RFQ
-  rivalDealer : Party  -- ^ a competing dealer who must learn NOTHING
-  regulator   : Party  -- ^ optional auditor with a private read-only window
+  custodian : Party  -- ^ token issuer (observer on holdings)
+  alice     : Party  -- ^ a user (maker)
+  bob       : Party  -- ^ a user (taker)
+  market    : Party  -- ^ the public market: an outsider who must see nothing
+  regulator : Party  -- ^ optional auditor with a private read-only window
 
 setupParties : Script LedgerParties
 setupParties = do
-  custodian   <- allocateParty "Custodian"
-  pensionFund <- allocateParty "PensionFund"
-  bankDealer  <- allocateParty "BankDealer"
-  rivalDealer <- allocateParty "RivalDealer"
-  regulator   <- allocateParty "Regulator"
+  custodian <- allocateParty "Custodian"
+  alice     <- allocateParty "Alice"
+  bob       <- allocateParty "Bob"
+  market    <- allocateParty "Market"
+  regulator <- allocateParty "Regulator"
   pure LedgerParties with ..
 
--- | End-to-end happy path with privacy assertions baked in. This doubles as
--- the init-script (see daml.yaml) so `daml start` boots straight into a
--- settled trade you can inspect in the Navigator.
+-- | End-to-end confidential-DeFi flow with privacy assertions baked in.
+-- Doubles as the init-script (see daml.yaml).
 demo : Script ()
 demo = do
   LedgerParties{..} <- setupParties
   let reg = Some regulator
 
-  -- Issue the seller 1,000 bonds and the buyer 1,000,000 USD of tokenized cash.
-  -- (Simplified mint: the owner self-signs. Production would gate issuance
-  --  behind a custodian propose/accept.)
-  bondCid <- submit bankDealer do
+  -- Seed wallets: Alice holds 1 wBTC + 20,000 USDC, Bob holds 65,000 USDC.
+  aliceBtc  <- submit alice do
     createCmd Holding with
-      issuer = custodian; owner = bankDealer; regulator = reg
-      instrument = "ACME-2030-BOND"; amount = 1000.0
-  cashCid <- submit pensionFund do
+      issuer = custodian; owner = alice; regulator = reg; instrument = "wBTC"; amount = 1.0
+  aliceUsdc <- submit alice do
     createCmd Holding with
-      issuer = custodian; owner = pensionFund; regulator = reg
-      instrument = "USD"; amount = 1000000.0
+      issuer = custodian; owner = alice; regulator = reg; instrument = "USDC"; amount = 20000.0
+  bobUsdc   <- submit bob do
+    createCmd Holding with
+      issuer = custodian; owner = bob; regulator = reg; instrument = "USDC"; amount = 65000.0
 
-  -- Step 1: the buyer privately asks ONLY BankDealer for a price on 1,000 bonds.
-  rfqCid <- submit pensionFund do
-    createCmd RFQ with
-      buyer = pensionFund; dealer = bankDealer; regulator = reg
-      instrument = "ACME-2030-BOND"; quantity = 1000.0
+  -- 1) PRIVATE SEND: Alice sends 5,000 USDC to Bob.
+  (sendPiece, _change) <- submit alice do exerciseCmd aliceUsdc Split with splitAmount = 5000.0
+  _ <- submitMulti [alice, bob] [] do exerciseCmd sendPiece Transfer with newOwner = bob
+  marketHoldings <- query @Holding market
+  assertMsg "PRIVACY BREACH: market can see holdings" (null marketHoldings)
 
-  -- Privacy assertion: the rival dealer cannot see the RFQ.
-  rivalRfqs <- query @RFQ rivalDealer
-  assertMsg "PRIVACY BREACH: rival dealer can see the RFQ" (null rivalRfqs)
+  -- 2) CONFIDENTIAL LIMIT ORDER: Alice offers 1 wBTC for 65,000 USDC, fillable by Bob.
+  orderCid <- submit alice do
+    createCmd Order with
+      maker = alice; taker = bob; regulator = reg
+      giveInstrument = "wBTC"; giveAmount = 1.0
+      wantInstrument = "USDC"; wantAmount = 65000.0
+  marketOrders <- query @Order market
+  assertMsg "PRIVACY BREACH: market can see the order" (null marketOrders)
+  regulatorOrders <- query @Order regulator
+  assertMsg "regulator should be able to audit the order" (not (null regulatorOrders))
 
-  -- Step 2: BankDealer quotes USD 950.00 per bond.
-  proposalCid <- submit bankDealer do
-    exerciseCmd rfqCid Quote with unitPrice = 950.0
+  -- 3) SWAP = FILL: Bob fills the order. Atomic asset-for-asset, co-authorized
+  -- so each leg is visible inside the single transaction.
+  _ <- submitMulti [bob, alice] [] do
+    exerciseCmd orderCid Fill with makerHoldingCid = aliceBtc; takerHoldingCid = bobUsdc
 
-  -- Step 3: the buyer accepts, creating a bilateral Trade (price = 950,000).
-  tradeCid <- submit pensionFund do
-    exerciseCmd proposalCid AcceptQuote
-
-  -- Privacy checks on the LIVE trade (before it settles and is archived):
-  -- the regulator can audit it; the rival dealer still sees nothing.
-  liveTradesReg <- query @Trade regulator
-  assertMsg "regulator should be able to audit the trade" (not (null liveTradesReg))
-  liveTradesRival <- query @Trade rivalDealer
-  assertMsg "PRIVACY BREACH: rival dealer can see the Trade" (null liveTradesRival)
-
-  -- Carve the exact payment leg (950,000) out of the buyer's 1,000,000 balance.
-  (paymentCid, _changeCid) <- submit pensionFund do
-    exerciseCmd cashCid Split with splitAmount = 950000.0
-
-  -- Step 4: atomic delivery-versus-payment.
-  -- Both counterparties co-submit the settlement: inside Settle each leg must
-  -- be readable, and Canton privacy means neither party can see the other's
-  -- holding by default. Co-submission provides that visibility for the single
-  -- atomic transaction. (In production this is done with Canton explicit
-  -- disclosure, so neither party needs standing visibility into the other's
-  -- holdings.)
-  _ <- submitMulti [pensionFund, bankDealer] [] do
-    exerciseCmd tradeCid Settle with assetCid = bondCid; cashCid = paymentCid
-
-  -- Outcome assertions: the buyer holds the bonds, the seller holds the cash...
-  buyerHoldings  <- query @Holding pensionFund
-  sellerHoldings <- query @Holding bankDealer
-  assertMsg "buyer should now hold the bonds"
-    (any (\(_, h) -> h.instrument == "ACME-2030-BOND" && h.owner == pensionFund) buyerHoldings)
-  assertMsg "seller should now hold the cash"
-    (any (\(_, h) -> h.instrument == "USD" && h.amount == 950000.0 && h.owner == bankDealer) sellerHoldings)
+  -- Outcome: Alice now holds the 65,000 USDC, Bob holds the 1 wBTC; the market
+  -- saw nothing of the send, the order, or the swap.
+  aliceFinal <- query @Holding alice
+  bobFinal   <- query @Holding bob
+  assertMsg "Alice should hold the 65,000 USDC"
+    (any (\(_, h) -> h.instrument == "USDC" && h.amount == 65000.0 && h.owner == alice) aliceFinal)
+  assertMsg "Bob should hold the 1 wBTC"
+    (any (\(_, h) -> h.instrument == "wBTC" && h.amount == 1.0 && h.owner == bob) bobFinal)
+  marketFinal <- query @Order market
+  assertMsg "market still blind after settlement" (null marketFinal)
 
   pure ()

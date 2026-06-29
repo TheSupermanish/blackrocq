@@ -1,15 +1,13 @@
-// blackrocq demo backend.
+// blackrocq demo backend, confidential DeFi on Canton.
 //
-// Zero-dependency Node server that drives the confidential OTC flow through the
-// Daml JSON API and exposes a tiny REST surface for the split-screen UI.
+// Zero-dependency Node server that drives three private primitives through the
+// Daml JSON API and exposes a small REST surface for the UI:
+//   send   - a confidential transfer
+//   swap   - an instant atomic asset-for-asset exchange (post + fill an order)
+//   order  - a resting confidential limit order (fill / cancel later)
 //
-// Everything that points at the ledger is env-configurable, so the SAME app
-// runs against the local Canton sandbox or a hosted participant (e.g. Seaport):
-//   LEDGER_JSON_API   default http://localhost:7575
-//   LEDGER_ID         default "sandbox"
-//   JWT_SECRET        default "secret"   (sandbox runs --allow-insecure-tokens)
-//   PKG_ID            main package id of the deployed DAR
-//   PORT              default 4000
+// Env-configurable so the same app runs on the local sandbox or a hosted
+// participant (Seaport): LEDGER_JSON_API, LEDGER_ID, JWT_SECRET, PKG_ID, PORT.
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
@@ -23,219 +21,214 @@ const PKG =
   process.env.PKG_ID ||
   fs.readFileSync(path.join(__dirname, ".pkgid"), "utf8").trim();
 
-const TPL = {
-  Holding: `${PKG}:Asset:Holding`,
-  RFQ: `${PKG}:Trading:RFQ`,
-  TradeProposal: `${PKG}:Trading:TradeProposal`,
-  Trade: `${PKG}:Trading:Trade`,
-};
-const ALL_TEMPLATES = Object.values(TPL);
-const shortName = (tid) => tid.split(":").slice(-1)[0]; // "...:Trading:RFQ" -> "RFQ"
+const TPL = { Holding: `${PKG}:Asset:Holding`, Order: `${PKG}:Trading:Order` };
+const ALL = Object.values(TPL);
+const short = (tid) => tid.split(":").slice(-1)[0];
+const fmt = (n) => (Number.isInteger(n) ? `${n}.0` : String(n));
 
 // ---- JSON API helpers --------------------------------------------------------
-function tokenFor(parties, admin = false) {
-  return mint({ ledgerId: LEDGER_ID, secret: SECRET, actAs: parties, admin });
-}
+const tokenFor = (parties, admin = false) =>
+  mint({ ledgerId: LEDGER_ID, secret: SECRET, actAs: parties, admin });
 
-async function api(pathname, token, body) {
+async function call(pathname, token, body) {
   const res = await fetch(`${JSON_API}${pathname}`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify(body || {}),
   });
   const json = await res.json();
-  if (json.status !== 200) {
-    throw new Error(`${pathname} failed: ${JSON.stringify(json.errors || json)}`);
-  }
+  if (json.status !== 200)
+    throw new Error(`${pathname}: ${JSON.stringify(json.errors || json)}`);
   return json.result;
 }
-
-const allocateParty = (hint) =>
-  api("/v1/parties/allocate", tokenFor([], true), { identifierHint: hint }).then(
-    (r) => r.identifier
-  );
-
+const allocate = (hint) =>
+  call("/v1/parties/allocate", tokenFor([], true), { identifierHint: hint }).then((r) => r.identifier);
 const create = (token, templateId, payload) =>
-  api("/v1/create", token, { templateId, payload }).then((r) => r.contractId);
-
+  call("/v1/create", token, { templateId, payload }).then((r) => r.contractId);
 const exercise = (token, templateId, contractId, choice, argument = {}) =>
-  api("/v1/exercise", token, { templateId, contractId, choice, argument });
-
+  call("/v1/exercise", token, { templateId, contractId, choice, argument });
 const queryAs = (token) =>
-  api("/v1/query", token, { templateIds: ALL_TEMPLATES }).then((rows) =>
-    rows.map((r) => ({
-      type: shortName(r.templateId),
-      contractId: r.contractId,
-      payload: r.payload,
-    }))
+  call("/v1/query", token, { templateIds: ALL }).then((rows) =>
+    rows.map((r) => ({ type: short(r.templateId), contractId: r.contractId, payload: r.payload }))
   );
 
 // ---- Session state -----------------------------------------------------------
-// A "session" is a fresh set of parties. Because Canton visibility is per party,
-// a new party set is automatically a clean slate: old contracts are invisible.
 let S = null;
+const NAME = { alice: "Alice", bob: "Bob", market: "Market", regulator: "Regulator", custodian: "Custodian" };
+const labelOwner = (id) => {
+  if (!S) return id;
+  for (const k of Object.keys(S.parties)) if (S.parties[k] === id) return NAME[k];
+  return String(id).split("-")[0];
+};
+const logTx = (action, text) => {
+  S.log.unshift({ action, text, n: ++S.txCount });
+  S.log = S.log.slice(0, 12);
+};
 
 async function initSession() {
-  // Canton derives a party's id deterministically from its hint, so each
-  // session uses a unique tag to get a fresh, clean set of parties. Because
-  // visibility is per party, a new set is automatically a clean slate.
   const tag = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
-  const [custodian, fund, dealer, rival, regulator] = await Promise.all([
-    allocateParty(`Custodian-${tag}`),
-    allocateParty(`PensionFund-${tag}`),
-    allocateParty(`BankDealer-${tag}`),
-    allocateParty(`RivalDealer-${tag}`),
-    allocateParty(`Regulator-${tag}`),
+  const [custodian, alice, bob, market, regulator] = await Promise.all([
+    allocate(`Custodian-${tag}`),
+    allocate(`Alice-${tag}`),
+    allocate(`Bob-${tag}`),
+    allocate(`Market-${tag}`),
+    allocate(`Regulator-${tag}`),
   ]);
-
+  const parties = { custodian, alice, bob, market, regulator };
   const tok = {
-    fund: tokenFor([fund]),
-    dealer: tokenFor([dealer]),
-    rival: tokenFor([rival]),
+    alice: tokenFor([alice]),
+    bob: tokenFor([bob]),
+    market: tokenFor([market]),
     regulator: tokenFor([regulator]),
-    settle: tokenFor([fund, dealer]), // co-authorized atomic settlement
+    co: tokenFor([alice, bob]), // co-authorize 2-party actions (send/swap/fill)
   };
+  const tokById = { [alice]: tok.alice, [bob]: tok.bob };
 
-  // Seed initial holdings: the dealer owns the bond, the fund owns the cash.
-  const bondCid = await create(tok.dealer, TPL.Holding, {
-    issuer: custodian,
-    owner: dealer,
-    regulator,
-    instrument: "ACME-2030-BOND",
-    amount: "1000.0",
-  });
-  const cashCid = await create(tok.fund, TPL.Holding, {
-    issuer: custodian,
-    owner: fund,
-    regulator,
-    instrument: "USD",
-    amount: "1000000.0",
-  });
+  S = { parties, tok, tokById, reserved: new Set(), orders: {}, log: [], txCount: 0 };
 
-  S = {
-    parties: { custodian, fund, dealer, rival, regulator },
-    tok,
-    cids: { bondCid, cashCid, rfqCid: null, proposalCid: null, tradeCid: null },
-    instrument: "ACME-2030-BOND",
-    quantity: 1000,
-    unitPrice: null,
-    step: "seeded",
-  };
+  // Seed wallets. Both users hold both tokens so either can make or take.
+  const reg = regulator;
+  const seed = (token, owner, instrument, amount) =>
+    create(token, TPL.Holding, { issuer: custodian, owner, regulator: reg, instrument, amount: fmt(amount) });
+  await Promise.all([
+    seed(tok.alice, alice, "wBTC", 5),
+    seed(tok.alice, alice, "USDC", 200000),
+    seed(tok.bob, bob, "wBTC", 2),
+    seed(tok.bob, bob, "USDC", 500000),
+  ]);
+  logTx("seed", "Alice: 5 wBTC + 200,000 USDC   Bob: 2 wBTC + 500,000 USDC");
   return S;
 }
 
-// ---- Flow steps --------------------------------------------------------------
-async function doRfq() {
-  const { parties, tok } = S;
-  S.cids.rfqCid = await create(tok.fund, TPL.RFQ, {
-    buyer: parties.fund,
-    dealer: parties.dealer,
-    regulator: parties.regulator,
-    instrument: S.instrument,
-    quantity: String(S.quantity) + ".0",
-  });
-  S.step = "rfq";
-}
-
-async function doQuote(unitPrice) {
-  S.unitPrice = unitPrice;
-  const r = await exercise(S.tok.dealer, TPL.RFQ, S.cids.rfqCid, "Quote", {
-    unitPrice: String(unitPrice) + ".0",
-  });
-  S.cids.proposalCid = r.exerciseResult;
-  S.step = "quote";
-}
-
-async function doAccept() {
-  const r = await exercise(
-    S.tok.fund,
-    TPL.TradeProposal,
-    S.cids.proposalCid,
-    "AcceptQuote"
+// Find (or split out) a holding of exactly `amount` of `instrument` owned by
+// `owner`, skipping holdings reserved to back resting orders.
+async function splitToExact(token, owner, instrument, amount) {
+  const rows = await queryAs(token);
+  const cands = rows.filter(
+    (c) => c.type === "Holding" && c.payload.owner === owner &&
+      c.payload.instrument === instrument && !S.reserved.has(c.contractId)
   );
-  S.cids.tradeCid = r.exerciseResult;
-  S.step = "accept";
+  const exact = cands.find((c) => parseFloat(c.payload.amount) === amount);
+  if (exact) return exact.contractId;
+  const big = cands.find((c) => parseFloat(c.payload.amount) > amount);
+  if (!big) throw new Error(`${labelOwner(owner)} has insufficient ${instrument} (need ${amount})`);
+  const r = await exercise(token, TPL.Holding, big.contractId, "Split", { splitAmount: fmt(amount) });
+  return r.exerciseResult._1;
 }
 
-async function doSettle() {
-  const cashAmount = S.quantity * S.unitPrice; // 1000 * 950 = 950000
-  // Carve the exact payment leg out of the fund's cash.
-  const split = await exercise(S.tok.fund, TPL.Holding, S.cids.cashCid, "Split", {
-    splitAmount: String(cashAmount) + ".0",
-  });
-  const paymentCid = split.exerciseResult._1;
-  // Atomic delivery-versus-payment, co-authorized by both counterparties.
-  await exercise(S.tok.settle, TPL.Trade, S.cids.tradeCid, "Settle", {
-    assetCid: S.cids.bondCid,
-    cashCid: paymentCid,
-  });
-  S.step = "settled";
+// ---- Actions -----------------------------------------------------------------
+async function doSend(b = {}) {
+  const from = b.from || S.parties.alice, to = b.to || S.parties.bob;
+  const instrument = b.instrument || "USDC", amount = b.amount ?? 5000;
+  const piece = await splitToExact(S.tokById[from], from, instrument, amount);
+  await exercise(S.tok.co, TPL.Holding, piece, "Transfer", { newOwner: to });
+  logTx("send", `${labelOwner(from)} privately sent ${amount.toLocaleString()} ${instrument} to ${labelOwner(to)}`);
 }
 
+async function placeOrder(b = {}) {
+  const maker = b.maker || S.parties.alice, taker = b.taker || S.parties.bob;
+  const gI = b.giveInstrument || "wBTC", gA = b.giveAmount ?? 1;
+  const wI = b.wantInstrument || "USDC", wA = b.wantAmount ?? 66000;
+  const makerHoldingCid = await splitToExact(S.tokById[maker], maker, gI, gA); // pre-size + reserve the give-leg
+  const orderCid = await create(S.tokById[maker], TPL.Order, {
+    maker, taker, regulator: S.parties.regulator,
+    giveInstrument: gI, giveAmount: fmt(gA), wantInstrument: wI, wantAmount: fmt(wA),
+  });
+  S.reserved.add(makerHoldingCid);
+  S.orders[orderCid] = { maker, taker, makerHoldingCid, giveInstrument: gI, giveAmount: gA, wantInstrument: wI, wantAmount: wA };
+  logTx("order", `${labelOwner(maker)} posted a private limit order: give ${gA} ${gI} for ${wA.toLocaleString()} ${wI}`);
+  return orderCid;
+}
+
+async function fillOrder(orderCid, rec) {
+  const o = rec || S.orders[orderCid];
+  if (!o) throw new Error("unknown order");
+  const makerHoldingCid = o.makerHoldingCid || (await splitToExact(S.tokById[o.maker], o.maker, o.giveInstrument, o.giveAmount));
+  const takerHoldingCid = await splitToExact(S.tokById[o.taker], o.taker, o.wantInstrument, o.wantAmount);
+  await exercise(S.tok.co, TPL.Order, orderCid, "Fill", { makerHoldingCid, takerHoldingCid });
+  S.reserved.delete(makerHoldingCid);
+  delete S.orders[orderCid];
+  logTx("fill", `${labelOwner(o.taker)} filled: ${o.giveAmount} ${o.giveInstrument} ⇄ ${o.wantAmount.toLocaleString()} ${o.wantInstrument} (atomic swap)`);
+}
+
+async function doFill(b = {}) {
+  if (!b.orderCid) throw new Error("orderCid required");
+  await fillOrder(b.orderCid);
+}
+
+// Swap = post an order and fill it immediately.
+async function doSwap(b = {}) {
+  const maker = b.maker || S.parties.alice, taker = b.taker || S.parties.bob;
+  const gI = b.giveInstrument || "wBTC", gA = b.giveAmount ?? 0.5;
+  const wI = b.wantInstrument || "USDC", wA = b.wantAmount ?? 32500;
+  const makerHoldingCid = await splitToExact(S.tokById[maker], maker, gI, gA);
+  const orderCid = await create(S.tokById[maker], TPL.Order, {
+    maker, taker, regulator: S.parties.regulator,
+    giveInstrument: gI, giveAmount: fmt(gA), wantInstrument: wI, wantAmount: fmt(wA),
+  });
+  await fillOrder(orderCid, { maker, taker, makerHoldingCid, giveInstrument: gI, giveAmount: gA, wantInstrument: wI, wantAmount: wA });
+  S.log[0].action = "swap";
+  S.log[0].text = `${labelOwner(maker)} swapped ${gA} ${gI} for ${wA.toLocaleString()} ${wI} with ${labelOwner(taker)} (private, atomic)`;
+}
+
+async function doCancel(b = {}) {
+  const o = S.orders[b.orderCid];
+  if (!o) throw new Error("unknown order");
+  await exercise(S.tokById[o.maker], TPL.Order, b.orderCid, "Cancel");
+  S.reserved.delete(o.makerHoldingCid);
+  delete S.orders[b.orderCid];
+  logTx("cancel", `${labelOwner(o.maker)} cancelled their limit order`);
+}
+
+// ---- State -------------------------------------------------------------------
 async function buildState() {
-  const [fundView, dealerView, rivalView, regView] = await Promise.all([
-    queryAs(S.tok.fund),
-    queryAs(S.tok.dealer),
-    queryAs(S.tok.rival),
-    queryAs(S.tok.regulator),
+  const [a, bv, m, r] = await Promise.all([
+    queryAs(S.tok.alice), queryAs(S.tok.bob), queryAs(S.tok.market), queryAs(S.tok.regulator),
   ]);
-  // Counterparties panel = union of what the two trading parties can see.
   const byCid = new Map();
-  for (const c of [...fundView, ...dealerView]) byCid.set(c.contractId, c);
+  for (const c of [...a, ...bv]) byCid.set(c.contractId, c);
+  const counterparties = [...byCid.values()];
+  const orders = r.filter((c) => c.type === "Order").map((c) => ({ contractId: c.contractId, ...c.payload }));
   return {
-    step: S.step,
     parties: S.parties,
-    quantity: S.quantity,
-    unitPrice: S.unitPrice,
-    views: {
-      counterparties: [...byCid.values()],
-      rival: rivalView,
-      regulator: regView,
-    },
+    names: NAME,
+    views: { counterparties, market: m, regulator: r },
+    orders,
+    log: S.log,
   };
 }
 
-// ---- HTTP router -------------------------------------------------------------
-const send = (res, code, obj) => {
-  res.writeHead(code, { "Content-Type": "application/json" });
-  res.end(JSON.stringify(obj));
-};
-
-const STATIC_DIR = path.join(__dirname, "public");
+// ---- HTTP --------------------------------------------------------------------
+const send = (res, code, obj) => { res.writeHead(code, { "Content-Type": "application/json" }); res.end(JSON.stringify(obj)); };
+const readBody = (req) => new Promise((resolve) => {
+  let b = ""; req.on("data", (d) => (b += d)); req.on("end", () => { try { resolve(b ? JSON.parse(b) : {}); } catch { resolve({}); } });
+});
+const STATIC = path.join(__dirname, "public");
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
-
 function serveStatic(req, res) {
-  let p = req.url === "/" ? "/index.html" : req.url.split("?")[0];
-  const file = path.join(STATIC_DIR, p);
-  if (!file.startsWith(STATIC_DIR) || !fs.existsSync(file)) {
-    res.writeHead(404);
-    return res.end("not found");
-  }
+  const p = req.url === "/" ? "/index.html" : req.url.split("?")[0];
+  const file = path.join(STATIC, p);
+  if (!file.startsWith(STATIC) || !fs.existsSync(file)) { res.writeHead(404); return res.end("not found"); }
   res.writeHead(200, { "Content-Type": MIME[path.extname(file)] || "text/plain" });
   fs.createReadStream(file).pipe(res);
 }
 
+const ACTIONS = {
+  "/api/reset": initSession,
+  "/api/send": doSend,
+  "/api/swap": doSwap,
+  "/api/order": placeOrder,
+  "/api/fill": doFill,
+  "/api/cancel": doCancel,
+};
+
 const server = http.createServer(async (req, res) => {
   try {
-    if (req.method === "GET" && req.url.startsWith("/api/state")) {
+    if (req.method === "GET" && req.url.startsWith("/api/state")) return send(res, 200, await buildState());
+    if (req.method === "POST" && ACTIONS[req.url]) {
+      const body = await readBody(req);
+      await ACTIONS[req.url](body);
       return send(res, 200, await buildState());
-    }
-    if (req.method === "POST") {
-      const actions = {
-        "/api/reset": initSession,
-        "/api/rfq": doRfq,
-        "/api/quote": async () => doQuote(950),
-        "/api/accept": doAccept,
-        "/api/settle": doSettle,
-      };
-      const act = actions[req.url];
-      if (act) {
-        await act();
-        return send(res, 200, await buildState());
-      }
     }
     return serveStatic(req, res);
   } catch (e) {
@@ -244,12 +237,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 initSession()
-  .then(() => {
-    server.listen(PORT, () =>
-      console.log(`blackrocq demo on http://localhost:${PORT}  (ledger ${JSON_API})`)
-    );
-  })
-  .catch((e) => {
-    console.error("startup failed:", e);
-    process.exit(1);
-  });
+  .then(() => server.listen(PORT, () => console.log(`blackrocq on http://localhost:${PORT}  (ledger ${JSON_API}, pkg ${PKG.slice(0, 8)})`)))
+  .catch((e) => { console.error("startup failed:", e); process.exit(1); });

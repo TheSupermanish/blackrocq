@@ -1,90 +1,88 @@
 # blackrocq
 
-**Confidential OTC trading desk on Canton.**
+**Confidential DeFi on Canton.** Private send, private swap, private limit orders.
 
-Two institutions agree a large block trade: size, price, counterparties, and
-the trade itself stay private to the parties involved (plus an optional
-regulator). Settlement is atomic delivery-versus-payment: the asset and the
-cash change hands in one transaction, or neither does. The rest of the market
-sees nothing.
+On a public chain every transfer, swap, and resting order is visible to the
+whole world: positions leak, orders get front-run, strategies get copied.
+blackrocq makes them confidential by construction. A send, a swap, or a limit
+order is visible only to the parties involved (plus an optional regulator). The
+public market sees nothing, not even that the transaction exists.
 
-> The RFQ, quote, counterparties, and trade size are private to the two
-> parties (plus an optional regulator), but settlement is atomic DvP: and the
-> wider market learns nothing.
+> Move and trade tokens privately. The parties (and a regulator) see everything;
+> the market sees nothing; settlement is atomic.
+
+![live demo](docs/demo.png)
+
+## The three primitives
+
+- **Send** (`Holding.Transfer`): a confidential token transfer.
+- **Swap** (`Order` + `Fill`): an instant, atomic asset-for-asset exchange. Both
+  legs move in one transaction, or neither does.
+- **Limit order** (`Order`, resting): post an order at your price; it stays
+  private until your chosen counterparty fills it. A swap is just a limit order
+  filled immediately, so one primitive powers both.
+
+All three are private because of Canton's signatory/observer model, not because
+of application-level access control.
 
 ## Why Canton
 
-This is not "a database with permissions." Two differentiators are load-bearing:
+This is not "a database with permissions." Two capabilities are load-bearing:
 
-1. **Sub-transaction privacy** (signatory / observer model): the rival dealer
-   never learns a trade happened. Enforced by the ledger, not by app code.
-2. **Atomic multi-party settlement**: DvP with no trusted intermediary ever
-   holding both legs.
+1. **Sub-transaction privacy** (signatory / observer model): an outsider never
+   learns a send, swap, or order happened. Enforced by the ledger.
+2. **Atomic multi-party settlement**: a swap moves both legs together or not at
+   all, with no intermediary ever holding both sides.
 
 "Private to the market, transparent to the regulator" is built in via an
 optional `regulator` observer on every contract.
 
-## Flow
+## Model
 
+| Template  | Signatory | Observers         | File                |
+|-----------|-----------|-------------------|---------------------|
+| `Holding` | owner     | issuer, regulator | `daml/Asset.daml`   |
+| `Order`   | maker     | taker, regulator  | `daml/Trading.daml` |
+
+`Holding` carries `Transfer` (send) and `Split`. `Order` carries `Fill` (the
+atomic swap) and `Cancel`.
+
+## Live demo app
+
+A three-panel UI shows the same ledger from three points of view: the
+counterparties, the public market (which sees nothing), and the regulator.
+
+```bash
+./app/run-local.sh        # builds, starts sandbox + JSON API + backend
+# open http://localhost:4000 and try Send / Swap / Place limit order
 ```
-RFQ (buyer → one dealer)  →  Quote (dealer → buyer)  →  AcceptQuote  →  Trade  →  Settle (atomic DvP)
-```
 
-| Template        | Signatory     | Observers          | File           |
-|-----------------|---------------|--------------------|----------------|
-| `Holding`       | owner         | issuer, regulator  | `daml/Asset.daml`   |
-| `RFQ`           | buyer         | dealer, regulator  | `daml/Trading.daml` |
-| `TradeProposal` | seller        | buyer, regulator   | `daml/Trading.daml` |
-| `Trade`         | seller, buyer | regulator          | `daml/Trading.daml` |
+The public market column stays empty no matter what you do. See
+[app/README.md](app/README.md) for architecture and how to point it at Seaport.
 
-## Run it
+## Build and test
 
 Built and verified on **Daml SDK 2.10.4** (Java 17).
 
 ```bash
-curl -sSL https://get.daml.com/ | sh    # one-time install
+curl -sSL https://get.daml.com/ | sh
 export PATH="$HOME/.daml/bin:$PATH"
 daml build                              # compile -> .daml/dist/blackrocq-0.1.0.dar
-daml test                               # run Setup.demo + privacy assertions in memory
+daml test                               # Setup.demo + privacy assertions, in memory
 ```
 
-Run it on a real Canton ledger (this exact sequence passes end to end):
-
-```bash
-daml sandbox --port 6865 &
-daml ledger upload-dar --host localhost --port 6865 .daml/dist/blackrocq-0.1.0.dar
-daml script --ledger-host localhost --ledger-port 6865 \
-  --dar .daml/dist/blackrocq-0.1.0.dar --script-name Setup:demo
-```
-
-`Setup.demo` runs the full lifecycle and asserts that the rival dealer can see
-neither the RFQ nor the Trade, while the regulator can audit the live trade.
-
-See [DEPLOY.md](DEPLOY.md) for hosted deployment (Seaport, Canton DevNet).
-
-## Live demo app
-
-A three-panel UI shows one trade from three points of view, querying the ledger
-*as* each party over the Daml JSON API, so the privacy is real:
-
-![settled trade](docs/demo-settled.png)
-
-```bash
-./app/run-local.sh        # builds, starts sandbox + JSON API + backend
-# open http://localhost:4000 and step RFQ -> Quote -> Accept -> Settle
-```
-
-The rival dealer's column stays empty through the entire lifecycle. See
-[app/README.md](app/README.md) for architecture and how to point it at Seaport.
+`Setup.demo` runs send + a confidential limit order + a fill (swap) and asserts
+the market can see none of it while the regulator can audit it.
 
 ## Status
 
-- [x] Core Daml model: RFQ → Quote → Trade → atomic DvP, with regulator window
-- [x] `daml build` clean; `daml test` green (3 active contracts, 7 transactions)
-- [x] Deploys to a live Canton ledger and runs the full flow (verified on sandbox)
-- [x] Split-screen UI: counterparties vs rival (redacted) vs regulator, live on the ledger
-- [x] Pitch deck (`deck/`, rendered to PDF)
+- [x] Confidential DeFi model: `Holding`/`Transfer`, `Order`/`Fill`/`Cancel`
+- [x] `daml build` clean; `daml test` green
+- [x] Live stack (Canton sandbox + JSON API + backend), every endpoint tested
+- [x] Three-panel UI: send / swap / limit orders, market stays blind
 - [ ] Public live deployment (Seaport / hosted participant)
-- [ ] Multi-dealer RFQ (buyer fans out to N dealers, each blind to the others)
-- [ ] Daml Finance instruments for the asset and tokenized-deposit cash leg
-- [ ] 3-minute demo video
+- [ ] Multi-taker order book (open orders fillable by any of N takers)
+- [ ] Daml Finance instruments + tokenized-deposit settlement asset
+- [ ] Deck + 3-minute demo video (reframe to DeFi)
+
+See [DEPLOY.md](DEPLOY.md) for hosted deployment (Seaport, Canton DevNet).

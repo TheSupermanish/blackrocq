@@ -1,40 +1,53 @@
 # blackrocq live demo
 
-A three-panel UI showing one confidential OTC trade from three points of view:
-the **counterparties**, a **rival dealer** (who sees nothing), and the
-**regulator**. It runs on a live Canton ledger via the Daml JSON API, so the
-privacy is real, not faked in the UI.
+A three-panel UI showing the same Canton ledger from three points of view: the
+**counterparties**, the **public market** (which sees nothing), and the
+**regulator**. Try private send, private swap, and private limit orders. The
+market column stays empty no matter what you do.
 
-![settled](../docs/demo-settled.png)
+![demo](../docs/demo.png)
 
 ## Run locally
 
 Prereqs: Daml SDK 2.10.4, Java 17, Node 18+.
 
 ```bash
-./app/run-local.sh
+./app/run-local.sh        # builds, starts sandbox + JSON API + backend
 ```
 
-Then open http://localhost:4000 and click through **RFQ → Quote → Accept →
-Settle**. Watch the rival dealer's column: it stays empty the entire time.
+Open http://localhost:4000 and use **Send / Swap / Place limit order**. Ctrl-C
+stops everything.
 
-The script builds the DAR, starts the Canton sandbox and JSON API, uploads the
-DAR, and runs the backend. Ctrl-C stops everything.
+## REST endpoints (each tested against the live Daml JSON API)
+
+| Method + path     | Body                                   | Effect                                  |
+|-------------------|----------------------------------------|-----------------------------------------|
+| `POST /api/send`  | `{from?,to?,instrument?,amount?}`      | confidential transfer                   |
+| `POST /api/swap`  | `{maker?,taker?,give*,want*}`          | instant atomic swap (post + fill)       |
+| `POST /api/order` | `{maker?,taker?,give*,want*}`          | place a resting limit order             |
+| `POST /api/fill`  | `{orderCid}`                           | fill a resting order (atomic swap)      |
+| `POST /api/cancel`| `{orderCid}`                           | cancel a resting order                  |
+| `POST /api/reset` | -                                      | fresh party set + reseed wallets        |
+| `GET  /api/state` | -                                      | per-party views + open orders + tx log  |
+
+All bodies are optional with sensible demo defaults.
 
 ## Architecture
 
 ```
 browser  (app/public/index.html)
-  -> Node backend (app/server.js)     REST: /api/state /api/rfq /quote /accept /settle
-    -> Daml JSON API  (:7575)         per-party JWTs
-      -> Canton ledger (:6865)        signatory/observer privacy + atomic DvP
+  -> Node backend (app/server.js)     zero-dep REST over the JSON API
+    -> Daml JSON API  (:7575)         per-party JWTs (insecure tokens in dev)
+      -> Canton ledger (:6865)        signatory/observer privacy + atomic swap
 ```
 
-The backend allocates a fresh set of parties per session and mints a per-party
-JWT, so each panel queries the ledger **as that party**. The rival dealer's
-panel is empty because the ledger genuinely discloses nothing to it. Settlement
-is co-authorized by both counterparties (a single token with `actAs` set to
-both), mirroring the atomic DvP in the Daml model.
+The backend allocates a fresh party set per session, mints a per-party JWT, and
+queries the ledger **as each party**, so the market panel is empty because the
+ledger genuinely discloses nothing to a non-party. Sends, swaps, and fills are
+co-authorized (a token with `actAs` set to both parties) so each leg is visible
+inside the single atomic transaction. `splitToExact` carves exact-sized legs out
+of larger holdings; holdings backing a resting order are reserved so other
+actions never spend them.
 
 ## Point it at Seaport (or any hosted participant)
 
@@ -49,5 +62,4 @@ node app/server.js
 ```
 
 If the platform issues its own tokens instead of accepting insecure ones, swap
-the `mint()` call in `jwt.js` for the platform's token endpoint. Nothing else
-changes.
+the `mint()` call in `jwt.js` for the platform's token endpoint.
