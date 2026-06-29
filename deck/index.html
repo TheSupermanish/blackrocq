@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>blackrocq — Pitch Deck</title>
+<style>
+  :root{
+    --ink:#0B0E17;
+    --ink-2:#0E121C;
+    --panel:#151A26;
+    --panel-2:#1A2132;
+    --line:#262E40;
+    --line-soft:#1E2738;
+    --text:#ECEEF4;
+    --muted:#828DA6;
+    --faint:#576versteckt;
+    --faint:#56607A;
+    --amber:#F2A33C;
+    --amber-deep:#D2832A;
+    --amber-soft:rgba(242,163,60,.12);
+    --green:#5FD08A;
+    --redact:#04060B;
+    --sans:"Helvetica Neue","SF Pro Display",-apple-system,BlinkMacSystemFont,system-ui,Arial,sans-serif;
+    --mono:"SF Mono","Menlo","JetBrains Mono",ui-monospace,"Courier New",monospace;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:#05070C;}
+  html,body,.slide{
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+  body{font-family:var(--sans);color:var(--text);-webkit-font-smoothing:antialiased;}
+
+  /* ---- Slide frame: one slide == one 16:9 page ---- */
+  @page{ size:13.333in 7.5in; margin:0; }
+  .slide{
+    position:relative;
+    width:13.333in;
+    height:7.5in;
+    background:var(--ink);
+    overflow:hidden;
+    page-break-after:always;
+    break-after:page;
+    padding:0.82in 0.92in 0.64in;
+    display:flex;
+    flex-direction:column;
+  }
+  .slide:last-child{ page-break-after:auto; break-after:auto; }
+
+  /* On screen, give slides breathing room + a hairline so the deck reads as a deck */
+  @media screen{
+    body{background:#05070C;padding:28px 0;}
+    .slide{margin:0 auto 26px;border:1px solid var(--line-soft);box-shadow:0 24px 60px rgba(0,0,0,.5);}
+  }
+
+  /* ---- Shared atoms ---- */
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12.5px;
+    letter-spacing:.26em;
+    text-transform:uppercase;
+    color:var(--amber);
+    font-weight:600;
+  }
+  .muted{color:var(--muted);}
+  h1,h2,h3{margin:0;text-wrap:balance;font-weight:700;letter-spacing:-.02em;line-height:1.04;}
+  p{margin:0;line-height:1.5;}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+  .num{font-variant-numeric:tabular-nums;}
+
+  /* footer bar present on every slide */
+  .footer{
+    margin-top:auto;
+    display:flex;align-items:center;justify-content:space-between;
+    padding-top:18px;
+    border-top:1px solid var(--line-soft);
+    font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);
+  }
+  .footer .brand b{color:var(--text);font-weight:600;}
+  .footer .brand i{color:var(--amber);font-style:normal;}
+
+  .wordmark{font-weight:800;letter-spacing:-.03em;}
+  .wordmark .q{color:var(--amber);}
+
+  /* redaction bar motif */
+  .redact{
+    display:inline-block;border-radius:2px;color:transparent !important;user-select:none;
+    background:
+      repeating-linear-gradient(45deg,#02040A 0 7px,#0B0F18 7px 14px);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);
+    vertical-align:middle;
+  }
+
+  .tag{
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:5px 11px;display:inline-block;
+  }
+
+  .pill-ok{color:var(--green);}
+  .pill-no{color:#E2706A;}
+
+  /* ============ SLIDE 1 — TITLE ============ */
+  .s-title{justify-content:center;}
+  .s-title .glow{
+    position:absolute;inset:0;
+    background:radial-gradient(58% 70% at 22% 38%, rgba(242,163,60,.16), transparent 60%),
+               radial-gradient(50% 60% at 90% 90%, rgba(95,208,138,.06), transparent 60%);
+    pointer-events:none;
+  }
+  .s-title .grid{
+    position:absolute;inset:0;opacity:.5;pointer-events:none;
+    background-image:linear-gradient(var(--line-soft) 1px,transparent 1px),
+                     linear-gradient(90deg,var(--line-soft) 1px,transparent 1px);
+    background-size:54px 54px;
+    -webkit-mask-image:radial-gradient(70% 70% at 30% 40%,#000 30%,transparent 78%);
+            mask-image:radial-gradient(70% 70% at 30% 40%,#000 30%,transparent 78%);
+  }
+  .s-title .content{position:relative;z-index:2;}
+  .s-title h1{font-size:118px;line-height:.92;margin:18px 0 0;}
+  .s-title .tagline{font-size:30px;font-weight:500;color:var(--text);margin-top:26px;letter-spacing:-.01em;}
+  .s-title .sub{font-size:18px;color:var(--muted);margin-top:14px;font-family:var(--mono);letter-spacing:.02em;}
+  .s-title .redline{margin-top:30px;display:flex;gap:8px;align-items:center;}
+  .s-title .redline .redact{height:15px;}
+
+  /* ============ generic header for content slides ============ */
+  .head{display:flex;flex-direction:column;gap:14px;margin-bottom:30px;}
+  .head h2{font-size:48px;}
+  .head .lead{font-size:20px;color:var(--muted);max-width:60ch;line-height:1.5;}
+
+  /* ============ SLIDE 3 — three cards ============ */
+  .cols-3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;flex:1;}
+  .card{
+    background:linear-gradient(180deg,var(--panel),var(--ink-2));
+    border:1px solid var(--line);border-radius:14px;padding:26px 24px;
+    display:flex;flex-direction:column;gap:13px;
+  }
+  .card h3{font-size:21px;letter-spacing:-.01em;}
+  .card .k{font-family:var(--mono);font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);}
+  .card p{font-size:15.5px;color:var(--muted);line-height:1.55;}
+  .verdict{margin-top:22px;font-size:18px;color:var(--text);}
+  .verdict b{color:var(--amber);font-weight:700;}
+
+  /* ============ SLIDE 4 — pillars ============ */
+  .pillars{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;flex:1;}
+  .pillar{display:flex;flex-direction:column;gap:14px;padding:30px 26px;border-radius:14px;
+    background:radial-gradient(120% 100% at 0 0,rgba(242,163,60,.05),transparent 60%),var(--panel);
+    border:1px solid var(--line);}
+  .pillar .ix{font-family:var(--mono);font-size:13px;color:var(--amber);letter-spacing:.2em;}
+  .pillar h3{font-size:30px;}
+  .pillar p{font-size:16px;color:var(--muted);line-height:1.55;}
+
+  /* ============ SLIDE 5 — flow ============ */
+  .flow{display:flex;align-items:stretch;gap:0;flex:1;margin-top:6px;}
+  .step{flex:1;display:flex;flex-direction:column;gap:11px;padding:24px 20px;position:relative;}
+  .step:not(:last-child){border-right:1px solid var(--line-soft);}
+  .step .n{font-family:var(--mono);font-size:12px;color:var(--faint);letter-spacing:.2em;}
+  .step h3{font-size:23px;color:var(--amber);font-family:var(--mono);font-weight:600;letter-spacing:0;}
+  .step p{font-size:14.5px;color:var(--muted);line-height:1.5;}
+  .step .see{margin-top:auto;font-family:var(--mono);font-size:11.5px;letter-spacing:.04em;color:var(--text);
+    border-top:1px dashed var(--line);padding-top:11px;}
+  .step .see span{color:var(--faint);display:block;letter-spacing:.16em;text-transform:uppercase;font-size:10px;margin-bottom:4px;}
+  .flow-cap{margin-top:22px;font-family:var(--mono);font-size:13px;color:var(--muted);letter-spacing:.01em;}
+  .flow-cap b{color:var(--text);font-weight:600;}
+
+  /* ============ SLIDE 6 — the proof (signature) ============ */
+  .views{display:flex;flex-direction:column;gap:14px;flex:1;justify-content:center;}
+  .view{
+    display:grid;grid-template-columns:200px 1fr;gap:24px;align-items:center;
+    border:1px solid var(--line);border-radius:13px;padding:20px 24px;background:var(--panel);
+  }
+  .view .who{display:flex;flex-direction:column;gap:6px;}
+  .view .who .lbl{font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--text);}
+  .view .who .sub{font-size:12.5px;color:var(--faint);font-family:var(--mono);}
+  .view .data{font-family:var(--mono);font-size:16px;letter-spacing:.01em;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;}
+  .view .data .sep{color:var(--line);}
+  .view .data .amt{color:var(--amber);}
+  .view.ok{box-shadow:inset 3px 0 0 var(--green);}
+  .view.no{box-shadow:inset 3px 0 0 #E2706A;}
+  .view.reg{box-shadow:inset 3px 0 0 var(--amber);}
+  .view .data .redact{height:17px;}
+  .view .note{font-family:var(--sans);font-size:13.5px;color:var(--muted);font-style:italic;}
+  .proof-cap{margin-top:18px;font-size:14px;color:var(--muted);line-height:1.5;}
+  .proof-cap b{color:var(--green);font-weight:700;}
+  .chip{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;padding:3px 9px;border-radius:5px;}
+  .chip.settled{background:rgba(95,208,138,.14);color:var(--green);}
+  .chip.audit{background:var(--amber-soft);color:var(--amber);}
+
+  /* ============ SLIDE 7 — two panels ============ */
+  .duo{display:grid;grid-template-columns:1fr 1fr;gap:22px;flex:1;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:32px 30px;display:flex;flex-direction:column;gap:16px;}
+  .panel .k{font-family:var(--mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--amber);}
+  .panel h3{font-size:27px;}
+  .panel p{font-size:16.5px;color:var(--muted);line-height:1.55;}
+  .panel .demo{margin-top:auto;font-family:var(--mono);font-size:12.5px;color:var(--faint);border-top:1px solid var(--line);padding-top:14px;}
+
+  /* ============ SLIDE 8 — criteria grid ============ */
+  .grid-4{display:grid;grid-template-columns:1fr 1fr;gap:18px 22px;flex:1;}
+  .crit{display:flex;gap:16px;padding:20px 4px;border-bottom:1px solid var(--line-soft);}
+  .crit .m{font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--amber);min-width:128px;padding-top:3px;}
+  .crit p{font-size:15.5px;color:var(--text);line-height:1.5;}
+  .crit p span{color:var(--muted);}
+  .themes{margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;}
+
+  /* ============ SLIDE 9 — close ============ */
+  .s-close{justify-content:center;text-align:left;}
+  .s-close .glow{position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(60% 80% at 78% 60%,rgba(242,163,60,.14),transparent 62%);}
+  .s-close .content{position:relative;z-index:2;}
+  .s-close h2{font-size:40px;font-weight:600;margin-top:24px;max-width:20ch;letter-spacing:-.01em;}
+  .s-close .word{font-size:64px;}
+  .s-close .line{font-size:21px;color:var(--muted);margin-top:18px;}
+  .s-close .repo{margin-top:30px;font-family:var(--mono);font-size:15px;color:var(--amber);letter-spacing:.02em;}
+</style>
+</head>
+<body>
+
+<!-- ============================ 01 · TITLE ============================ -->
+<section class="slide s-title">
+  <div class="grid"></div>
+  <div class="glow"></div>
+  <div class="content">
+    <div class="eyebrow">Private DeFi &amp; Capital Markets · Canton Foundation</div>
+    <h1 class="wordmark">blackroc<span class="q">q</span></h1>
+    <div class="tagline">A confidential OTC trading desk on Canton.</div>
+    <div class="sub">Move size without moving the market.</div>
+    <div class="redline">
+      <span class="redact" style="width:150px"></span>
+      <span class="redact" style="width:64px"></span>
+      <span class="redact" style="width:104px"></span>
+      <span class="mono" style="color:var(--faint);font-size:13px;letter-spacing:.08em;">// what the market is allowed to see</span>
+    </div>
+  </div>
+  <div class="footer">
+    <div class="brand"><b>blackrocq</b> · confidential capital markets</div>
+    <div>01 / 09</div>
+  </div>
+</section>
+
+<!-- ============================ 02 · PROBLEM ============================ -->
+<section class="slide">
+  <div class="head">
+    <div class="eyebrow">The problem</div>
+    <h2>The moment your order is visible,<br>the price runs away from you.</h2>
+  </div>
+  <div style="display:grid;grid-template-columns:1.05fr .95fr;gap:40px;flex:1;align-items:center;">
+    <div style="display:flex;flex-direction:column;gap:22px;">
+      <p style="font-size:19px;color:var(--muted);line-height:1.6;">
+        A pension fund wants to buy a <b style="color:var(--text)">$100M block of bonds</b>. On a lit venue, the instant that intent is visible, the market front-runs it and the price moves against the fund.
+      </p>
+      <p style="font-size:19px;color:var(--muted);line-height:1.6;">
+        This is <b style="color:var(--amber)">information leakage</b> — the multi-billion-dollar reason trillions trade off-exchange, over the counter, in the dark.
+      </p>
+    </div>
+    <div style="background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:28px;">
+      <div class="mono" style="font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);margin-bottom:18px;">Order intent leaks → price drifts</div>
+      <div style="display:flex;flex-direction:column;gap:13px;font-family:var(--mono);font-size:15px;">
+        <div style="display:flex;justify-content:space-between;"><span class="muted">T+0  intent seen</span><span class="num">100.00</span></div>
+        <div style="display:flex;justify-content:space-between;"><span class="muted">T+1  front-run</span><span class="num" style="color:var(--amber)">100.42</span></div>
+        <div style="display:flex;justify-content:space-between;"><span class="muted">T+2  front-run</span><span class="num" style="color:var(--amber)">101.09</span></div>
+        <div style="display:flex;justify-content:space-between;border-top:1px dashed var(--line);padding-top:13px;">
+          <span style="color:var(--text)">fill price</span><span class="num pill-no">101.63</span></div>
+        <div style="display:flex;justify-content:space-between;"><span class="muted">slippage</span><span class="num pill-no">+1.63%  ≈ $1.6M</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><div class="brand"><b>blackrocq</b></div><div>02 / 09</div></div>
+</section>
+
+<!-- ============================ 03 · THREE BAD OPTIONS ============================ -->
+<section class="slide">
+  <div class="head">
+    <div class="eyebrow">Today, you pick your poison</div>
+    <h2>Three options. Each breaks something.</h2>
+  </div>
+  <div class="cols-3">
+    <div class="card">
+      <div class="k">Public chains</div>
+      <h3>Everyone sees everything.</h3>
+      <p>Positions, counterparties, and size are broadcast to the entire world — and stay there forever. For an institution, that is a non-starter.</p>
+    </div>
+    <div class="card">
+      <div class="k">Private databases</div>
+      <h3>No trustless settlement.</h3>
+      <p>You can hide the data, but you can't settle a trade across two firms without a trusted intermediary holding both the cash and the asset.</p>
+    </div>
+    <div class="card">
+      <div class="k">Legacy OTC</div>
+      <h3>Slow, manual, risky.</h3>
+      <p>Bilateral messages and manual reconciliation, carrying settlement risk: one side pays while the other fails to deliver.</p>
+    </div>
+  </div>
+  <div class="verdict">Nobody is private <b>and</b> atomic <b>and</b> auditable. That gap is the opportunity.</div>
+  <div class="footer"><div class="brand"><b>blackrocq</b></div><div>03 / 09</div></div>
+</section>
+
+<!-- ============================ 04 · SOLUTION ============================ -->
+<section class="slide">
+  <div class="head">
+    <div class="eyebrow">The solution · blackrocq</div>
+    <h2>Private. Atomic. Auditable.<br>All three, on Canton.</h2>
+  </div>
+  <div class="pillars">
+    <div class="pillar">
+      <div class="ix">01 — PRIVATE</div>
+      <h3>Invisible by construction</h3>
+      <p>The request, the quote, the counterparties, and the size are visible only to the two parties involved. The rest of the market sees nothing — enforced by the ledger, not by app-level permissions.</p>
+    </div>
+    <div class="pillar">
+      <div class="ix">02 — ATOMIC</div>
+      <h3>Delivery vs payment</h3>
+      <p>The asset and the cash change hands in a single transaction, or neither leg moves. No settlement risk, and no intermediary ever holds both sides of the trade.</p>
+    </div>
+    <div class="pillar">
+      <div class="ix">03 — AUDITABLE</div>
+      <h3>A regulator window</h3>
+      <p>An optional regulator observes every contract. Private to the market, transparent to the regulator — the property institutions actually require.</p>
+    </div>
+  </div>
+  <div class="footer"><div class="brand"><b>blackrocq</b></div><div>04 / 09</div></div>
+</section>
+
+<!-- ============================ 05 · HOW IT WORKS ============================ -->
+<section class="slide">
+  <div class="head">
+    <div class="eyebrow">The workflow</div>
+    <h2>From quiet request to atomic settlement.</h2>
+  </div>
+  <div class="flow">
+    <div class="step">
+      <div class="n">STEP 01</div>
+      <h3>RFQ</h3>
+      <p>The buyer privately asks one named dealer for a price on a block.</p>
+      <div class="see"><span>Who can see it</span>Buyer · that one dealer</div>
+    </div>
+    <div class="step">
+      <div class="n">STEP 02</div>
+      <h3>QUOTE</h3>
+      <p>The dealer responds with a price, visible only to the two of them.</p>
+      <div class="see"><span>Who can see it</span>Buyer · dealer</div>
+    </div>
+    <div class="step">
+      <div class="n">STEP 03</div>
+      <h3>ACCEPT</h3>
+      <p>The buyer turns the quote into a bilateral trade both have signed.</p>
+      <div class="see"><span>Who can see it</span>Both counterparties</div>
+    </div>
+    <div class="step">
+      <div class="n">STEP 04</div>
+      <h3>SETTLE · DvP</h3>
+      <p>Asset and cash swap in one atomic transaction, or neither moves.</p>
+      <div class="see"><span>Who can see it</span>Counterparties · regulator</div>
+    </div>
+  </div>
+  <div class="flow-cap">Privacy is enforced by Canton's <b>signatory / observer</b> model — not by application-level access control.</div>
+  <div class="footer"><div class="brand"><b>blackrocq</b></div><div>05 / 09</div></div>
+</section>
+
+<!-- ============================ 06 · THE PROOF (signature) ============================ -->
+<section class="slide">
+  <div class="head" style="margin-bottom:20px;">
+    <div class="eyebrow">The 10-second proof</div>
+    <h2>One trade. Three points of view.</h2>
+  </div>
+  <div class="views">
+    <div class="view ok">
+      <div class="who">
+        <div class="lbl">Counterparties</div>
+        <div class="sub">PensionFund ⇄ BankDealer</div>
+      </div>
+      <div class="data">
+        <span>1,000 ACME-2030-BOND</span><span class="sep">·</span>
+        <span>@ 950.00</span><span class="sep">·</span>
+        <span class="amt">950,000 USD</span><span class="sep">·</span>
+        <span class="chip settled">✓ settled</span>
+      </div>
+    </div>
+    <div class="view no">
+      <div class="who">
+        <div class="lbl">Rival dealer</div>
+        <div class="sub">competing market maker</div>
+      </div>
+      <div class="data">
+        <span class="redact" style="width:190px"></span>
+        <span class="redact" style="width:78px"></span>
+        <span class="redact" style="width:120px"></span>
+        <span class="note">No record. A $950K trade just settled — they see nothing.</span>
+      </div>
+    </div>
+    <div class="view reg">
+      <div class="who">
+        <div class="lbl">Regulator</div>
+        <div class="sub">read-only oversight</div>
+      </div>
+      <div class="data">
+        <span>1,000 ACME-2030-BOND</span><span class="sep">·</span>
+        <span>@ 950.00</span><span class="sep">·</span>
+        <span class="amt">950,000 USD</span><span class="sep">·</span>
+        <span class="chip audit">✓ audit</span>
+      </div>
+    </div>
+  </div>
+  <div class="proof-cap">This isn't a slide claim. Our <span class="mono" style="color:var(--text)">Setup.demo</span> script <b>asserts on-ledger</b> that the rival dealer can query neither the RFQ nor the Trade, while the regulator can audit the settled trade.</div>
+  <div class="footer"><div class="brand"><b>blackrocq</b></div><div>06 / 09</div></div>
+</section>
+
+<!-- ============================ 07 · WHY ONLY CANTON ============================ -->
+<section class="slide">
+  <div class="head">
+    <div class="eyebrow">Why this can only work on Canton</div>
+    <h2>Two capabilities. Both load-bearing.</h2>
+  </div>
+  <div class="duo">
+    <div class="panel">
+      <div class="k">Capability 01</div>
+      <h3>Sub-transaction privacy</h3>
+      <p>Through the signatory / observer model, a rival never even learns that a trade happened. Confidentiality is a property of the ledger, not a feature we layered on top.</p>
+      <div class="demo">// rival.query(RFQ)  →  ∅</div>
+    </div>
+    <div class="panel">
+      <div class="k">Capability 02</div>
+      <h3>Atomic multi-party settlement</h3>
+      <p>True delivery-versus-payment across two institutions: both legs commit together or not at all. Zero settlement risk, and no middleman holding both sides.</p>
+      <div class="demo">// Settle: asset⇄cash in one tx, or neither</div>
+    </div>
+  </div>
+  <div class="verdict" style="margin-top:24px;">Take either away and the product collapses. <b>That is the test of a real Canton app.</b></div>
+  <div class="footer"><div class="brand"><b>blackrocq</b></div><div>07 / 09</div></div>
+</section>
+
+<!-- ============================ 08 · WHY IT WINS ============================ -->
+<section class="slide">
+  <div class="head">
+    <div class="eyebrow">Why it wins</div>
+    <h2>Built against every judging line.</h2>
+  </div>
+  <div class="grid-4">
+    <div class="crit"><div class="m">Technical</div><p>Clean, documented Daml. Privacy enforced by the ledger; atomic DvP proven with <span>on-ledger assertions, not hand-waving.</span></p></div>
+    <div class="crit"><div class="m">Originality</div><p>A regulator-observable confidential desk. <span>Most teams build private or auditable — not both at once.</span></p></div>
+    <div class="crit"><div class="m">UX &amp; design</div><p>The split-screen who-sees-what view makes <span>invisible privacy legible to a non-technical user in seconds.</span></p></div>
+    <div class="crit" style="border-bottom:none;"><div class="m">Real-world</div><p>Information leakage in block trading is a genuine, expensive, <span>institutional problem. This is how desks actually work.</span></p></div>
+  </div>
+  <div class="themes">
+    <span class="tag">Private DeFi &amp; Capital Markets</span>
+    <span class="tag">OTC &amp; private deal execution</span>
+    <span class="tag">RWA &amp; Tokenized Deposits — the cash leg</span>
+  </div>
+  <div class="footer"><div class="brand"><b>blackrocq</b></div><div>08 / 09</div></div>
+</section>
+
+<!-- ============================ 09 · CLOSE ============================ -->
+<section class="slide s-close">
+  <div class="glow"></div>
+  <div class="content">
+    <div class="eyebrow">The ask</div>
+    <h1 class="wordmark word">blackroc<span class="q">q</span></h1>
+    <h2>The front door to institutional capital markets on Canton.</h2>
+    <div class="line">Move size without moving the market. Private to the market, transparent to the regulator.</div>
+    <div class="repo">github.com/TheSupermanish/blackrocq</div>
+  </div>
+  <div class="footer"><div class="brand"><b>blackrocq</b> · built on <i>Canton</i></div><div>09 / 09</div></div>
+</section>
+
+</body>
+</html>
