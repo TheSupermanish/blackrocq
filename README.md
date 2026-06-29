@@ -2,23 +2,23 @@
 
 **Confidential OTC trading desk on Canton.**
 
-Two institutions agree a large block trade — size, price, counterparties, and
+Two institutions agree a large block trade: size, price, counterparties, and
 the trade itself stay private to the parties involved (plus an optional
 regulator). Settlement is atomic delivery-versus-payment: the asset and the
 cash change hands in one transaction, or neither does. The rest of the market
 sees nothing.
 
 > The RFQ, quote, counterparties, and trade size are private to the two
-> parties (plus an optional regulator), but settlement is atomic DvP — and the
+> parties (plus an optional regulator), but settlement is atomic DvP: and the
 > wider market learns nothing.
 
 ## Why Canton
 
 This is not "a database with permissions." Two differentiators are load-bearing:
 
-1. **Sub-transaction privacy** (signatory / observer model) — the rival dealer
+1. **Sub-transaction privacy** (signatory / observer model): the rival dealer
    never learns a trade happened. Enforced by the ledger, not by app code.
-2. **Atomic multi-party settlement** — DvP with no trusted intermediary ever
+2. **Atomic multi-party settlement**: DvP with no trusted intermediary ever
    holding both legs.
 
 "Private to the market, transparent to the regulator" is built in via an
