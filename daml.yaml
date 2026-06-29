@@ -1,0 +1,15 @@
+sdk-version: 2.9.1
+name: blackrocq
+version: 0.1.0
+source: daml
+init-script: Setup:demo
+parties:
+  - Custodian
+  - PensionFund
+  - BankDealer
+  - RivalDealer
+  - Regulator
+dependencies:
+  - daml-prim
+  - daml-stdlib
+  - daml-script
