@@ -5,3 +5,4 @@ app/.pkgid
 node_modules/
 
 log/
+.DS_Store
